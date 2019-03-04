@@ -17,7 +17,6 @@
 using namespace std;
 //const string SYMBOLES_GRIS{ " .;-+oO0#$&%" };
 const string SYMBOLES_GRIS{ " .;o0#&%" };
-//const string SYMBOLES_GRIS{ ".:*IVFNM" };
 
 enum class Operation
 {
@@ -26,6 +25,15 @@ enum class Operation
 	PlusPetit,
 	Quitter,
 };
+
+void afficherInstructions(void)
+{
+	cout << "La touche Escape (ESC) pour quitter." << endl;
+	cout << "La touche + (plus) pour grandir l'échelle." << endl;
+	cout << "La touche - (moins) pour réduire l'échelle." << endl;
+	cout << "--- ENTRÉE pour débuter ---" << endl;
+	cin.get();
+}
 
 char generer(size_t x, size_t y, size_t tailleX, size_t tailleY, float echelle)
 {
@@ -72,9 +80,9 @@ void obtenirTailleFenetre(size_t & largeur, size_t & hauteur)
 	hauteur = tailleFenetre.Y;
 }
 
+static auto derniereLecture{ std::chrono::system_clock::now() };
 Operation interagir(void)
 {
-	static auto derniereLecture{ std::chrono::system_clock::now() };
 	static const auto attenteLecture = chrono::milliseconds(500);
 	const auto maintenant{ std::chrono::system_clock::now() };
 	const bool okPeutLire = ((derniereLecture + attenteLecture) < maintenant);
@@ -109,11 +117,12 @@ void configurerConsole(size_t & largeur, size_t & hauteur)
 
 int main(void)
 {
-	//setlocale(LC_ALL, "C");
+	setlocale(LC_ALL, "");
 
 	size_t tailleX{ 80 };
 	size_t tailleY{ 25 };
 	configurerConsole(tailleX, tailleY);
+	afficherInstructions();
 
 	std::future< Operation > future{ std::async(std::launch::async, interagir) };
 	const string separateur(tailleX, '-');
