@@ -1,4 +1,5 @@
 # PerlinAnsi
-ANSI render of Perlin noise.
-
-Windows only.
+ASCII/ANSI render of Perlin 2D noise using stb_perlin:
+- Fullscreen;
+- Windows only;
+- Press any key to quit.
