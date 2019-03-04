@@ -4,6 +4,7 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include <limits>
 
 #include "stb_perlin.h"
 
@@ -14,10 +15,21 @@
 //-------
 
 using namespace std;
-const string SYMBOLES_GRIS{ " .;-+oO0#$&%" };
+//const string SYMBOLES_GRIS{ " .;-+oO0#$&%" };
+const string SYMBOLES_GRIS{ " .;o0#&%" };
+//const string SYMBOLES_GRIS{ ".:*IVFNM" };
 
-char generer(size_t x, size_t y, size_t tailleX, size_t tailleY)
+enum class Operation
 {
+	Rien,
+	PlusGrand,
+	PlusPetit,
+	Quitter,
+};
+
+char generer(size_t x, size_t y, size_t tailleX, size_t tailleY, float echelle)
+{
+	echelle = (echelle / 4);	// Ajuster l'échelle
 	const float ECHELLE_X = 8.f;
 	const float ECHELLE_Y = 4.f;
 	const float unSurTailleX{ 1.f / tailleX };
@@ -32,22 +44,22 @@ char generer(size_t x, size_t y, size_t tailleX, size_t tailleY)
 	// Le wrap (l'enroulement) permet de garder le signal entre certaines valeurs,
 	// lors que nous spécifions 0, nous laissons le contrôle à Perlin et recevont dans l'intervale complet [-1.f, 1.f]
 	// [-1.f, 1.f] --> +1.f --> [0.f, 2.f ] --> *0.5f --> [0.f, 1.f] --> *255 + 0.5 -> [0.5, 255.5] -> transtypage(int - laisser tomber les décimales) -> [0, 255]
-	int _0_255 = static_cast< int >(((stb_perlin_noise3(x * unSurTailleX * ECHELLE_X,
-														y * unSurTailleY * ECHELLE_Y,
+	int _0_255 = static_cast< int >(((stb_perlin_noise3(x * unSurTailleX * ECHELLE_X * echelle,
+														y * unSurTailleY * ECHELLE_Y * echelle,
 														/*z*/ 0.f,
 														0, 0, 0)	// wrap / enroulement
 										+ 1.f) * 0.5f * 255) + 0.5f);
 	_0_255 = min(max(0, _0_255), 255);	// Restreindre à [0, 255]
-	const char carac = SYMBOLES_GRIS.at(static_cast< int >(_0_255 / 255.f * SYMBOLES_GRIS.length() + 0.5f));
+	const char carac = SYMBOLES_GRIS.at(static_cast< int >(	_0_255 / 256.f * SYMBOLES_GRIS.length()));
 	return carac;
 }
 
-void ecrireLigne(size_t y, size_t tailleX, size_t tailleY)
+void ecrireLigne(size_t y, size_t tailleX, size_t tailleY, float echelle)
 {
 	string line( tailleX, ' ' );
 	for (size_t x = 0; x < tailleX; x++)
 	{
-		line[x] = generer(x, y, tailleX, tailleY);
+		line[x] = generer(x, y, tailleX, tailleY, echelle);
 	}
 	cout << line << endl;
 	cout.flush();
@@ -60,45 +72,80 @@ void obtenirTailleFenetre(size_t & largeur, size_t & hauteur)
 	hauteur = tailleFenetre.Y;
 }
 
-bool quitter(void)
+Operation interagir(void)
 {
-	// Tester toutes les touches du clavier
-	for (int k{ 8 }; k <= 254; ++k)
+	static auto derniereLecture{ std::chrono::system_clock::now() };
+	static const auto attenteLecture = chrono::milliseconds(500);
+	const auto maintenant{ std::chrono::system_clock::now() };
+	const bool okPeutLire = ((derniereLecture + attenteLecture) < maintenant);
+	while (okPeutLire)
 	{
-		if (GetKeyState(k) & 0x8000)	// Touche appuyée?
+		if (GetAsyncKeyState(VK_ADD) & 0x8000)
 		{
-			return true;
+			derniereLecture = maintenant;
+			return Operation::PlusGrand;
+		}
+		else if (GetAsyncKeyState(VK_SUBTRACT) & 0x8000)
+		{
+			derniereLecture = maintenant;
+			return Operation::PlusPetit;
+		}
+		else if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
+		{
+			derniereLecture = maintenant;
+			return Operation::Quitter;
 		}
 	}
-	return false;
+	return Operation::Rien;
+}
+
+void configurerConsole(size_t & largeur, size_t & hauteur)
+{
+	::SendMessage(::GetConsoleWindow(), WM_SYSKEYDOWN, VK_RETURN, 0x20000000); // Plein écran
+	obtenirTailleFenetre(largeur, hauteur);
+	system(("mode " + to_string(largeur) + ',' + to_string(hauteur)).c_str());	// Taille MS-DOS
+	cout << endl;
 }
 
 int main(void)
 {
-	setlocale(LC_ALL, "");
+	//setlocale(LC_ALL, "C");
 
 	size_t tailleX{ 80 };
 	size_t tailleY{ 25 };
+	configurerConsole(tailleX, tailleY);
 
-	// Configurer la console
-	::SendMessage(::GetConsoleWindow(), WM_SYSKEYDOWN, VK_RETURN, 0x20000000);
-	obtenirTailleFenetre(tailleX, tailleY);
-	system(("mode " + to_string(tailleX) + ',' + to_string(tailleY)).c_str());	// Taille MS-DOS
-	system("cls");	// Effacer MS-DOS
-
-	const auto attente{ chrono::milliseconds(40) };
+	std::future< Operation > future{ std::async(std::launch::async, interagir) };
+	const string separateur(tailleX, '-');
+	const auto attente{ chrono::milliseconds(15) };
 	size_t y{ 0 };
+	float echelle{ 4 };
 	bool fin{ false };
 	while (!fin)
 	{
 		obtenirTailleFenetre(tailleX, tailleY);
 		y++;
-		ecrireLigne(y, tailleX, tailleY);
+		ecrireLigne(y, tailleX, tailleY, echelle);
 
-		std::future< bool > future{ std::async(std::launch::async, quitter) };
-		if (future.wait_for(attente) == std::future_status::ready)
+		this_thread::sleep_for(attente);
+		if (future.wait_for(chrono::milliseconds::zero()) == std::future_status::ready)
 		{
-			fin = future.get();
+			const Operation op{ future.get() };
+			future = std::async(std::launch::async, interagir);
+			switch (op)
+			{
+			case Operation::PlusPetit:
+				echelle = echelle / 1.2f;
+				cout << separateur << endl;
+				break;
+			case Operation::PlusGrand:
+				echelle = echelle * 1.2f;
+				cout << separateur << endl;
+				break;
+			case Operation::Quitter:
+				fin = true;
+				break;
+			}
 		}
 	}
 
