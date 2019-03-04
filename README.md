@@ -1,4 +1,4 @@
-# PerlinAnsi
+# PerlinAscii
 ASCII render of Perlin 2D noise using stb_perlin:
 - Fullscreen;
 - Windows only;
